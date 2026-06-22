@@ -117,7 +117,14 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,Aria
 .kpi.c-orange .kpi-val{color:var(--orange)}
 .kpi.c-cyan .kpi-val{color:var(--cyan)}
 .kpi.c-purple .kpi-val{color:var(--purple)}
-.kpi-sub{font-size:12px;color:var(--muted);font-weight:500}
+.kpi-sub{font-size:12px;color:var(--muted);font-weight:500}.key-list{margin-top:8px;max-height:86px;overflow:auto;font-size:10px;line-height:1.45;color:var(--txt)}
+.alerts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.alert-list{display:grid;gap:8px;max-height:320px;overflow:auto}
+.alert-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px}
+.alert-item b{color:var(--txt)}
+.alert-meta{color:var(--muted);font-size:11px;margin-top:3px}
+@media(max-width:1100px){.alerts-row{grid-template-columns:1fr}}
+
 
 /* ── GAUGE KPI ───────────────────────────────────────────── */
 .kpi-gauge{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;margin-top:4px}
@@ -326,6 +333,16 @@ tr:last-child td{border-bottom:0}
         </div>
       </div>
     </div>
+    <div class="alerts-row">
+      <div class="card">
+        <div class="card-title">🔑 Llaves fuera del armario</div>
+        <div id="keysPanel" class="alert-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚨 Alertas operativas</div>
+        <div id="opsAlerts" class="alert-list"></div>
+      </div>
+    </div>
   </section>
 
   <!-- BUSCADOR -->
@@ -441,6 +458,35 @@ const isOK=r=>r._op==="OK"||r._op==="UNIDAD REPARADA";
 function destination(r){let trip=low(val(r,"viajes"));if(trip.includes("furlong"))return"EN TRÁNSITO";let d=val(r,"dest"),nd=low(d);if(!d||d==="0"||nd==="a-virtual"||nd==="sin dato")return"";if(nd.includes("salon"))return"SALÓN DE VENTAS";if(nd.includes("lomas inf"))return"LAS LOMAS INF.";if(nd.includes("lomas"))return"LAS LOMAS";return d;}
 const locationText=r=>val(r,"ubic")||val(r,"boxubic")||val(r,"dest")||"SIN DATO";
 function saleBranch(r){let v=low(val(r,"venta")+" "+val(r,"vend")+" "+val(r,"dest"));if(v.includes("salta"))return"Salta";if(v.includes("jujuy")||v.includes("lomas"))return"Jujuy";return"Sin dato";}
+function keyOwner(v){
+  let raw=clean(v), up=norm(raw), x=raw.replace("/","").trim().toUpperCase();
+  if(!raw) return "";
+  if(raw.includes("/")) return "";
+  if(up.includes("HERRERA") || x==="H") return "Herrera";
+  if(up.includes("QUIPILDOR") || x==="Q") return "Quipildor";
+  if(up.includes("CONRADO") || x==="C") return "Conrado";
+  if(up.includes("BRAVO") || x==="B") return "Claudio";
+  if(up.includes("ALTAMIRANO") || x==="A") return "Altamirano";
+  if(up.includes("ESCRITORIO")) return "Escritorio";
+  if(up.includes("SALON") || x==="SL") return "Salón";
+  return "";
+}
+function keyOutsideRows(){
+  return DATA.filter(r=>keyOwner(val(r,"llave"))).map(r=>({
+    owner:keyOwner(val(r,"llave")),
+    interno:val(r,"interno"),
+    vin:val(r,"vin"),
+    veh:val(r,"veh"),
+    box:val(r,"box")||val(r,"boxubic")||r._ubic,
+    raw:val(r,"llave")
+  }));
+}
+function keySummaryMini(){
+  let rows=keyOutsideRows();
+  if(rows.length===0) return "Todo en armario";
+  let c=count(rows.map(x=>x.owner));
+  return entries(c,3).map(([p,n])=>`${p}: ${n}`).join(" · ");
+}
 function keyText(v){let raw=clean(v),x=raw.replace("/","").trim(),up=norm(raw);let map={"T":"Bolsa / sobre letra T","2️⃣":"Llave en escritorio","✅":"Llave escritorio caja gris","C":"La tiene Conrado","B":"La tiene Bravo","A":"La tiene Altamirano","Q":"La tiene Quipildor","H":"La tiene Herrera","🟦":"Armario","🔵":"Escritorio","SL":"Salón Lomas"};if(raw.includes("/"))return"Bolsa / sobre letra "+x;if(up==="LLAVE EN ESCRITORIO 2")return"Llave escritorio caja gris";if(up==="LLAVE EN ESCRITORIO")return"Llave en escritorio";return map[x]||map[raw]||(raw?"Código: "+raw:"Sin dato");}
 function manualText(v){let x=clean(v),map={"❶":"Bandeja N°1","❷":"Bandeja N°2","❸":"Bandeja N°3","❹":"Bandeja N°4","⏹️":"Manual bolsa azul","⏺️":"Bolsa blanca","🚗":"Dentro de la unidad"};return map[x]||(x?"Código: "+x:"Sin dato");}
 function orInfo(v){let s=clean(v);if(!s)return{num:"—",estado:"Sin OR",cls:"b-blue"};let m=s.match(/(\d+)\s*[- ]?\s*([AC])?/i),num=m?m[1]:s,l=m&&m[2]?m[2].toUpperCase():"";return{num,estado:l==="A"?"ABIERTA":l==="C"?"CERRADA":"Sin estado",cls:l==="A"?"b-warn":l==="C"?"b-ok":"b-blue",raw:s};}
@@ -461,7 +507,7 @@ async function init(){
     document.getElementById("sys").textContent="No se pudo leer Google Sheet: "+err.message;
   }
 }
-function draw(){kpis();charts();fills();renderTable();renderStock();renderSeg();if(DATA[0])showDetail(DATA[0]);}
+function draw(){kpis();charts();fills();renderTable();renderStock();renderSeg();renderKeyPanels();if(DATA[0])showDetail(DATA[0]);}
 
 /* ── KPIs ── */
 function kpis(){
@@ -478,7 +524,7 @@ function kpis(){
     {icon:"🔧",label:"A reparar",val:repair,sub:pct(repair,total)+"% del stock",cls:"c-orange"},
     {icon:"📄",label:"Facturadas",val:fact.length,sub:`${j} Jujuy · ${s} Salta`,cls:"c-cyan"},
     {icon:"📊",label:"Control realizado",val:ctrlPct+"%",sub:"Eficiencia control",cls:"c-green",gauge:ctrlPct},
-    {icon:"📋",label:"Pend. control",val:ctrlPend,sub:"Sin control aún",cls:"c-purple"},
+    {icon:"🔑",label:"Llaves afuera",val:keyOutsideRows().length,sub:keySummaryMini(),cls:keyOutsideRows().length>3?"c-orange":keyOutsideRows().length>0?"c-purple":"c-green"},
   ];
   document.getElementById("kpis").innerHTML=cards.map(k=>`
     <div class="kpi ${k.cls}">
@@ -505,6 +551,34 @@ function gaugeHTML(p){
   <div class="gauge-lbl">${p>=80?"Muy bueno":p>=50?"Regular":"Bajo"}</div>`
 }
 
+function renderKeyPanels(){
+  let keys=keyOutsideRows();
+  let kp=document.getElementById("keysPanel");
+  if(kp){
+    if(keys.length===0){
+      kp.innerHTML='<div class="notice">🟢 No hay llaves fuera del armario.</div>';
+    }else{
+      let grouped={};
+      keys.forEach(x=>{(grouped[x.owner]||(grouped[x.owner]=[])).push(x);});
+      kp.innerHTML=Object.entries(grouped).sort((a,b)=>b[1].length-a[1].length).map(([owner,arr])=>`
+        <div class="alert-item">
+          <b>🔑 ${esc(owner)} (${arr.length})</b>
+          ${arr.slice(0,8).map(x=>`<div class="alert-meta">${esc(x.interno||"S/I")} · ${esc(x.veh||"Sin modelo")} · Box ${esc(x.box||"S/D")} · VIN ${esc(x.vin||"S/D")}</div>`).join("")}
+        </div>`).join("");
+    }
+  }
+  let ops=document.getElementById("opsAlerts");
+  if(ops){
+    let repairAll=DATA.filter(r=>r._op==="A REPARAR");
+    let sinOrAll=DATA.filter(r=>r._or.num==="—");
+    let ctrlAll=DATA.filter(r=>low(val(r,"control"))!=="ok");
+    let htmlOps="";
+    htmlOps += `<div class="alert-item"><b>🔧 A reparar: ${repairAll.length}</b>${repairAll.slice(0,6).map(r=>`<div class="alert-meta">${esc(val(r,"interno"))} · ${esc(val(r,"veh"))} · ${esc(r._ubic)}</div>`).join("")}</div>`;
+    htmlOps += `<div class="alert-item"><b>🟡 Sin OR: ${sinOrAll.length}</b>${sinOrAll.slice(0,6).map(r=>`<div class="alert-meta">${esc(val(r,"interno"))} · ${esc(val(r,"veh"))} · ${esc(r._ubic)}</div>`).join("")}</div>`;
+    htmlOps += `<div class="alert-item"><b>📋 Sin control OK: ${ctrlAll.length}</b>${ctrlAll.slice(0,6).map(r=>`<div class="alert-meta">${esc(val(r,"interno"))} · ${esc(val(r,"veh"))} · ${esc(r._ubic)}</div>`).join("")}</div>`;
+    ops.innerHTML=htmlOps;
+  }
+}
 /* ── CHARTS ── */
 function charts(){
   let total=DATA.length,ok=DATA.filter(isOK).length,noOk=total-ok;
