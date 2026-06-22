@@ -427,9 +427,9 @@ const ALIASES={
 const clean=v=>(v??"").toString().trim();
 const low=v=>clean(v).toLowerCase();
 const esc=v=>clean(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-function norm(s){return clean(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[º°]/g,"").replace(/\s+/g," ").trim().toUpperCase();}
+function norm(s){return clean(s).replace(/^\uFEFF/,"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[º°]/g,"").replace(/\s+/g," ").trim().toUpperCase();}
 function keyHeader(h){let nh=norm(h);for(let[k,arr]of Object.entries(ALIASES))for(let a of arr){let na=norm(a);if(nh===na||nh.startsWith(na)||na.startsWith(nh))return k;}return nh;}
-function parseTSV(t){let lines=t.replace(/\r/g,"").split("\n").filter(x=>x.trim());if(lines.length<2)return[];let h=lines[0].split("\t").map(keyHeader);return lines.slice(1).map(line=>{let vals=line.split("\t"),o={};h.forEach((x,i)=>o[x]=vals[i]??"");return o;}).filter(r=>Object.values(r).some(v=>clean(v)));}
+function parseTSV(t){t=t.replace(/^\uFEFF/,"");let lines=t.replace(/\r/g,"").split("\n").filter(x=>x.trim());if(lines.length<2)return[];let h=lines[0].split("\t").map(keyHeader);return lines.slice(1).map(line=>{let vals=line.split("\t"),o={};h.forEach((x,i)=>o[x]=vals[i]??"");return o;}).filter(r=>Object.values(r).some(v=>clean(v)));}
 const val=(r,k)=>clean(r[k]);
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 function count(a){return a.reduce((o,x)=>{x=clean(x);if(!x)return o;o[x]=(o[x]||0)+1;return o;},{});}
