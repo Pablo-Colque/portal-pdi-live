@@ -136,6 +136,10 @@ tr:last-child td{border-bottom:0}
 .b-red{background:rgba(255,63,82,.15);color:var(--red);border:1px solid rgba(255,63,82,.3)}
 .b-warn{background:rgba(255,171,0,.15);color:var(--orange);border:1px solid rgba(255,171,0,.3)}
 .b-blue{background:rgba(45,140,255,.15);color:var(--blue);border:1px solid rgba(45,140,255,.3)}
+.or-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;line-height:1.1}
+.or-num{font-size:13px;font-weight:900;color:var(--txt);letter-spacing:.3px}
+.or-cell .badge{width:max-content}
+
 
 /* TOOLBAR */
 .toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
@@ -268,7 +272,7 @@ tr:last-child td{border-bottom:0}
         <div class="tablewrap">
           <table><thead><tr>
             <th>Interno</th><th>VIN</th><th>OR</th><th>Modelo</th>
-            <th>Box</th><th>Ubicación</th><th>Llave</th><th>Manual</th>
+            <th>Box</th><th>Llave</th><th>Manual</th>
             <th>Estado</th><th>Vendedor</th>
           </tr></thead><tbody id="tbody"></tbody></table>
         </div>
@@ -287,7 +291,7 @@ tr:last-child td{border-bottom:0}
       <div class="tablewrap">
         <table><thead><tr>
           <th>Interno</th><th>VIN</th><th>OR</th><th>Vehículo</th>
-          <th>Nº Box</th><th>Box / ubic.</th><th>Ubicación</th>
+          <th>Box</th>
           <th>Llave</th><th>Manual/Elem.</th><th>Facturado</th>
           <th>Venta</th><th>Estado</th>
         </tr></thead><tbody id="stockBody"></tbody></table>
@@ -398,7 +402,10 @@ function keyOutsideRows(){return DATA.filter(r=>keyOwner(val(r,"llave"))).map(r=
 function keySummaryMini(){let rows=keyOutsideRows();if(rows.length===0)return"Todo en armario";let c=count(rows.map(x=>x.owner));return entries(c,3).map(([p,n])=>`${p}: ${n}`).join(" · ");}
 function keyText(v){let raw=clean(v),x=raw.replace("/","").trim(),up=norm(raw);let map={"T":"Bolsa / sobre letra T","2️⃣":"Llave en escritorio","✅":"Llave escritorio caja gris","C":"La tiene Conrado","B":"La tiene Bravo","A":"La tiene Altamirano","Q":"La tiene Quipildor","H":"La tiene Herrera","🟦":"Armario","🔵":"Escritorio","SL":"Salón Lomas"};if(raw.includes("/"))return"Bolsa / sobre letra "+x;if(up==="LLAVE EN ESCRITORIO 2")return"Llave escritorio caja gris";if(up==="LLAVE EN ESCRITORIO")return"Llave en escritorio";return map[x]||map[raw]||(raw?"Código: "+raw:"Sin dato");}
 function manualText(v){let x=clean(v),map={"❶":"Bandeja N°1","❷":"Bandeja N°2","❸":"Bandeja N°3","❹":"Bandeja N°4","⏹️":"Manual bolsa azul","⏺️":"Bolsa blanca","🚗":"Dentro de la unidad"};return map[x]||(x?"Código: "+x:"Sin dato");}
-function orInfo(v){let s=clean(v);if(!s)return{num:"—",estado:"Sin OR",cls:"b-blue"};let m=s.match(/(\d+)\s*[- ]?\s*([AC])?/i),num=m?m[1]:s,l=m&&m[2]?m[2].toUpperCase():"";return{num,estado:l==="A"?"ABIERTA":l==="C"?"CERRADA":"Sin estado",cls:l==="A"?"b-warn":l==="C"?"b-ok":"b-blue",raw:s};}
+function orInfo(v){let s=clean(v);if(!s)return{num:"—",estado:"Sin OR",cls:"b-blue"};let m=s.match(/(\d+)\s*[- ]?\s*([AC])?/i),num=m?m[1]:s,l=m&&m[2]?m[2].toUpperCase():"";return{num,estado:l==="A"?"ABIERTA":l==="C"?"CERRADA":"Sin estado",cls:l==="A"?"b-red":l==="C"?"b-ok":"b-blue",raw:s};}
+function orCell(r){
+  return `<div class="or-cell"><div class="or-num">${esc(r._or.num)}</div><span class="badge ${r._or.cls}">${esc(r._or.estado.toUpperCase())}</span></div>`;
+}
 function currentState(r){if(r._op==="OK")return{label:"🟢 OK",desc:"Unidad disponible según control operativo."};if(r._op==="UNIDAD REPARADA")return{label:"🟢 OK — Unidad reparada",desc:"Revisar observación antes de entrega si corresponde."};if(r._op==="A REPARAR")return{label:"🔴 NO OK",desc:val(r,"inf")||val(r,"otro")||"Pendiente de intervención."};return{label:"🟡 REVISAR",desc:val(r,"inf")||val(r,"otro")||"Pendiente de verificación."}}
 
 function prep(){DATA.forEach(r=>{r._fam=family(val(r,"veh"));r._op=opState(r);r._ubic=locationText(r);r._dest=destination(r);r._sale=saleBranch(r);r._or=orInfo(val(r,"orden"));r._keyDesc=keyText(val(r,"llave"));r._manualDesc=manualText(val(r,"manual"));r._state=currentState(r);r._search=(Object.values(r).join(" ")+" "+r._or.num+" "+r._or.raw+" "+r._keyDesc+" "+r._manualDesc).toLowerCase();});}
@@ -557,8 +564,8 @@ const clsBadge=op=>op==="OK"||op==="UNIDAD REPARADA"?"b-ok":op==="A REPARAR"?"b-
 function filtered(){let q=low(document.getElementById("q").value),es=clean(document.getElementById("fEstado").value),mo=clean(document.getElementById("fModelo").value),ub=clean(document.getElementById("fUbic").value),fa=clean(document.getElementById("fFact").value);return DATA.filter(r=>(!q||r._search.includes(q))&&(!es||r._op===es)&&(!mo||r._fam===mo)&&(!ub||r._ubic===ub)&&(!fa||val(r,"fact")===fa));}
 function row(r){return`<tr onclick="showDetailByVin('${esc(val(r,"vin"))}')">`+
   `<td><b>${esc(val(r,"interno"))}</b></td><td style="font-family:monospace;font-size:11px">${esc(val(r,"vin"))}</td>`+
-  `<td>${esc(r._or.num)} <span class="badge ${r._or.cls}">${esc(r._or.estado)}</span></td>`+
-  `<td>${esc(val(r,"veh"))}</td><td>${esc(val(r,"boxubic"))}</td><td>${esc(r._ubic)}</td>`+
+  `<td>${orCell(r)}</td>`+
+  `<td>${esc(val(r,"veh"))}</td><td>${esc(val(r,"boxubic")||val(r,"box"))}</td>`+
   `<td>${esc(val(r,"llave")||"—")}<br><small style="color:var(--muted)">${esc(r._keyDesc)}</small></td>`+
   `<td>${esc(val(r,"manual")||"—")}<br><small style="color:var(--muted)">${esc(r._manualDesc)}</small></td>`+
   `<td><span class="badge ${clsBadge(r._op)}">${esc(r._op)}</span></td>`+
@@ -566,8 +573,8 @@ function row(r){return`<tr onclick="showDetailByVin('${esc(val(r,"vin"))}')">`+
 function renderTable(){document.getElementById("tbody").innerHTML=filtered().map(row).join("");}
 function renderStock(){document.getElementById("stockBody").innerHTML=DATA.map(r=>`<tr onclick="showDetailByVin('${esc(val(r,"vin"))}')">`+
   `<td><b>${esc(val(r,"interno"))}</b></td><td style="font-family:monospace;font-size:11px">${esc(val(r,"vin"))}</td>`+
-  `<td>${esc(r._or.num)} <span class="badge ${r._or.cls}">${esc(r._or.estado)}</span></td>`+
-  `<td>${esc(val(r,"veh"))}</td><td>${esc(val(r,"box"))}</td><td>${esc(val(r,"boxubic"))}</td><td>${esc(r._ubic)}</td>`+
+  `<td>${orCell(r)}</td>`+
+  `<td>${esc(val(r,"veh"))}</td><td>${esc(val(r,"boxubic")||val(r,"box"))}</td>`+
   `<td>${esc(val(r,"llave"))}<br><small style="color:var(--muted)">${esc(r._keyDesc)}</small></td>`+
   `<td>${esc(val(r,"manual"))}<br><small style="color:var(--muted)">${esc(r._manualDesc)}</small></td>`+
   `<td>${esc(val(r,"fact"))}</td><td>${esc(val(r,"venta")||val(r,"vend"))}</td>`+
@@ -575,7 +582,7 @@ function renderStock(){document.getElementById("stockBody").innerHTML=DATA.map(r
 function renderSeg(){let arr=DATA.filter(r=>!isOK(r));
   document.getElementById("segBody").innerHTML=arr.map(r=>`<tr onclick="showDetailByVin('${esc(val(r,"vin"))}')">`+
     `<td><b>${esc(val(r,"interno"))}</b></td><td style="font-family:monospace;font-size:11px">${esc(val(r,"vin"))}</td>`+
-    `<td>${esc(r._or.num)} <span class="badge ${r._or.cls}">${esc(r._or.estado)}</span></td>`+
+    `<td>${orCell(r)}</td>`+
     `<td>${esc(val(r,"veh"))}</td><td><span class="badge ${clsBadge(r._op)}">${esc(r._op)}</span></td>`+
     `<td>${esc(val(r,"inf"))}</td><td>${esc(val(r,"otro"))}</td></tr>`).join("");
   document.getElementById("segSummary").innerHTML=`<div class="notice">Unidades <b>NO OK</b>: <b style="color:var(--red)">${arr.length}</b> sobre <b>${DATA.length}</b> en stock.</div>`;}
@@ -590,7 +597,7 @@ function showDetail(r){
       <div class="info-block"><div class="l">OR</div><div class="v">${esc(r._or.num)} · ${esc(r._or.estado)}</div></div>
       <div class="info-block"><div class="l">Dominio</div><div class="v">${esc(val(r,"dominio")||"—")}</div></div>
       <div class="info-block full"><div class="l">Vehículo</div><div class="v">${esc(val(r,"veh"))}</div></div>
-      <div class="info-block"><div class="l">Nº Box</div><div class="v">${esc(val(r,"box"))}</div></div>
+      <div class="info-block"><div class="l">Box</div><div class="v">${esc(val(r,"box"))}</div></div>
       <div class="info-block"><div class="l">Ubicación</div><div class="v">${esc(r._ubic)}</div></div>
       <div class="info-block"><div class="l">Destino actual</div><div class="v">${esc(val(r,"dest")||"—")}</div></div>
       <div class="info-block"><div class="l">Llave</div><div class="v">${esc(val(r,"llave")||"—")}<br><small style="color:var(--muted);font-size:11px">${esc(r._keyDesc)}</small></div></div>
