@@ -61,6 +61,11 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,Aria
 .kpi.c-orange .kpi-val{color:var(--orange)}.kpi.c-cyan .kpi-val{color:var(--cyan)}
 .kpi.c-purple .kpi-val{color:var(--purple)}
 .kpi-sub{font-size:12px;color:var(--muted);font-weight:500}
+.key-kpi-list{font-size:10px;line-height:1.45;color:var(--muted);max-height:46px;overflow:auto;margin-top:2px}
+.key-kpi-row{display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
+.key-kpi-row b{color:var(--txt);font-weight:800}
+.key-kpi-row .qty{color:var(--orange);font-weight:900}
+
 
 /* VELOCÍMETRO KPI */
 .kpi-gauge{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;margin-top:2px}
@@ -388,18 +393,34 @@ function saleBranch(r){let v=low(val(r,"venta")+" "+val(r,"vend")+" "+val(r,"des
 function keyOwner(v){
   let raw=clean(v),up=norm(raw),x=raw.replace("/","").trim().toUpperCase();
   if(!raw)return"";
-  if(raw.includes("/"))return"";
+
+  // NO contar llaves guardadas: bolsa, caja gris, armario o escritorio/caja.
+  if(raw.includes("/")||up.includes("BOLSA")||up.includes("CAJA GRIS")||up.includes("ARMARIO")||x==="🟦"||x==="✅"||x==="2️⃣")return"";
+
+  // Responsables internos.
   if(up.includes("HERRERA")||x==="H")return"Herrera";
   if(up.includes("QUIPILDOR")||x==="Q")return"Quipildor";
   if(up.includes("CONRADO")||x==="C")return"Conrado";
-  if(up.includes("BRAVO")||x==="B")return"Claudio";
+  if(up.includes("BRAVO")||up.includes("CLAUDIO")||x==="B")return"Claudio";
   if(up.includes("ALTAMIRANO")||x==="A")return"Altamirano";
-  if(up.includes("ESCRITORIO"))return"Escritorio";
   if(up.includes("SALON")||x==="SL")return"Salón";
-  return"";
+
+  // Vendedores / préstamos.
+  if(up.includes("ZELAYA"))return"Zelaya";
+  if(up.includes("ROMINA"))return"Romina";
+
+  // Si aparece un nombre/código no contemplado y no es caja/bolsa, lo mostramos.
+  return raw;
 }
 function keyOutsideRows(){return DATA.filter(r=>keyOwner(val(r,"llave"))).map(r=>({owner:keyOwner(val(r,"llave")),interno:val(r,"interno"),vin:val(r,"vin"),veh:val(r,"veh"),box:val(r,"box")||val(r,"boxubic")||r._ubic,raw:val(r,"llave")}));}
-function keySummaryMini(){let rows=keyOutsideRows();if(rows.length===0)return"Todo en armario";let c=count(rows.map(x=>x.owner));return entries(c,3).map(([p,n])=>`${p}: ${n}`).join(" · ");}
+function keySummaryMini(){
+  let rows=keyOutsideRows();
+  if(rows.length===0)return"Todo en armario";
+  let c=count(rows.map(x=>x.owner));
+  return `<div class="key-kpi-list">`+
+    entries(c,20).map(([p,n])=>`<div class="key-kpi-row"><span>${esc(p)}</span><span class="qty">${n}</span></div>`).join("")+
+  `</div>`;
+}: ${n}`).join(" · ");}
 function keyText(v){let raw=clean(v),x=raw.replace("/","").trim(),up=norm(raw);let map={"T":"Bolsa / sobre letra T","2️⃣":"Llave en escritorio","✅":"Llave escritorio caja gris","C":"La tiene Conrado","B":"La tiene Bravo","A":"La tiene Altamirano","Q":"La tiene Quipildor","H":"La tiene Herrera","🟦":"Armario","🔵":"Escritorio","SL":"Salón Lomas"};if(raw.includes("/"))return"Bolsa / sobre letra "+x;if(up==="LLAVE EN ESCRITORIO 2")return"Llave escritorio caja gris";if(up==="LLAVE EN ESCRITORIO")return"Llave en escritorio";return map[x]||map[raw]||(raw?"Código: "+raw:"Sin dato");}
 function manualText(v){let x=clean(v),map={"❶":"Bandeja N°1","❷":"Bandeja N°2","❸":"Bandeja N°3","❹":"Bandeja N°4","⏹️":"Manual bolsa azul","⏺️":"Bolsa blanca","🚗":"Dentro de la unidad"};return map[x]||(x?"Código: "+x:"Sin dato");}
 function orInfo(v){let s=clean(v);if(!s)return{num:"—",estado:"Sin OR",cls:"b-blue"};let m=s.match(/(\d+)\s*[- ]?\s*([AC])?/i),num=m?m[1]:s,l=m&&m[2]?m[2].toUpperCase():"";return{num,estado:l==="A"?"ABIERTA":l==="C"?"CERRADA":"Sin estado",cls:l==="A"?"b-red":l==="C"?"b-ok":"b-blue",raw:s};}
