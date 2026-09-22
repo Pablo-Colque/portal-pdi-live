@@ -20,6 +20,18 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,Aria
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
 .app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
 
+/* LOGIN */
+.login{position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,#0d2447 0%,#050d1a 70%);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.login.hidden{display:none}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:34px 28px;width:min(360px,100%);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.login-box .brand-name{font-size:40px}
+.login-box input{width:100%;margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;color:var(--txt);font-size:15px;outline:none;text-align:center}
+.login-box input:focus{border-color:var(--blue)}
+.login-box .btn{width:100%;margin-top:12px;padding:12px}
+.login-box .btn:disabled{opacity:.6;cursor:wait}
+.login-err{min-height:20px;margin-top:12px;font-size:12px;font-weight:700;color:var(--red)}
+.login-foot{margin-top:6px;font-size:11px;color:var(--dim)}
+
 /* SIDEBAR */
 .sidebar{background:linear-gradient(180deg,#061020 0%,#080f1e 60%,#050c18 100%);border-right:1px solid var(--border);padding:24px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .brand{padding:0 6px 24px;border-bottom:1px solid var(--border)}
@@ -34,6 +46,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,Aria
 .menu button.active{background:linear-gradient(90deg,rgba(45,140,255,.18),rgba(45,140,255,.06));color:var(--blue);border-left:3px solid var(--blue);padding-left:11px}
 .sidefoot{padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--dim);line-height:1.7}
 .sidefoot b{color:var(--muted)}
+.sidefoot .logout{margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--radius-sm);padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.sidefoot .logout:hover{border-color:var(--red);color:var(--red)}
 .sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -184,6 +198,21 @@ tr:last-child td{border-bottom:0}
 </style>
 </head>
 <body>
+
+<!-- LOGIN -->
+<div class="login" id="loginOverlay">
+  <div class="login-box">
+    <div class="brand-logo">Autosol Jujuy</div>
+    <div class="brand-name">PDI</div>
+    <div class="brand-sub">Portal Preentrega</div>
+    <input type="password" id="loginPass" placeholder="Clave de acceso" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')login()">
+    <button class="btn" id="loginBtn" onclick="login()">Ingresar</button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-foot">La sesión vence a las 12 horas</div>
+  </div>
+</div>
+
 <div class="app">
 <aside class="sidebar">
   <div class="brand">
@@ -200,8 +229,9 @@ tr:last-child td{border-bottom:0}
     <button onclick="show('sistema',this,'SISTEMA','Estado de conexión y sincronización')"><span class="ico">🔄</span> Sistema</button>
   </div>
   <div class="sidefoot">
-    <span class="sync-dot"></span><b>En vivo</b> · Google Sheet<br>
-    <span id="updated">Cargando...</span>
+    <span class="sync-dot"></span><b>En vivo</b> · Apps Script<br>
+    <span id="updated">Cargando...</span><br>
+    <button class="logout" onclick="cerrarSesion('Sesión cerrada.')">Cerrar sesión</button>
   </div>
 </aside>
 
@@ -212,7 +242,7 @@ tr:last-child td{border-bottom:0}
       <div class="page-sub" id="subtitle">Resumen operativo de preentregas</div>
     </div>
     <div class="topbar-right">
-      <div class="chip">Fuente: <b>Google Sheet TSV</b></div>
+      <div class="chip">Fuente: <b>Apps Script · acceso protegido</b></div>
       <div class="chip">Excel PABLO 2016 → Portal PDI</div>
     </div>
   </div>
@@ -326,14 +356,24 @@ tr:last-child td{border-bottom:0}
   <section id="sistema" class="view">
     <div class="card">
       <div class="card-title">Estado del sistema</div>
-      <div class="sys-box" id="sys">Cargando datos desde Google Sheet…</div>
+      <div class="sys-box" id="sys">Cargando datos…</div>
     </div>
   </section>
 </main>
 </div>
 
 <script>
-const TSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vTYm4UsSW4j_1lyNs1Ev6TS7vTIMGMRxvtHdCQeZkktCP6CF1hy20lez65Vtv2MWPHWQLnpbxPpLwgj/pub?gid=0&single=true&output=tsv";
+/* ── CONEXIÓN ─────────────────────────────────────────────────────
+   Antes el portal leía la planilla publicada en la web (TSV público: cualquiera con
+   el link veía VIN, llaves y vendedores). Ahora lee del Apps Script, que solo
+   entrega los datos con un token válido.
+   👉 Pegá acá la URL del Web App (Implementar → Gestionar implementaciones → URL). */
+const API_URL="PEGAR_ACA_LA_URL_DEL_WEB_APP";
+
+// Clave propia de este portal en el navegador. Distinta a la del Portal de Facturación:
+// los dos viven en pablo-colque.github.io y comparten el mismo localStorage.
+const TOKEN_KEY="pdiToken";
+
 let DATA=[],NOW="";
 
 const ALIASES={
@@ -430,47 +470,75 @@ function currentState(r){if(r._op==="OK")return{label:"🟢 OK",desc:"Unidad dis
 
 function prep(){DATA.forEach(r=>{r._fam=family(val(r,"veh"));r._op=opState(r);r._ubic=locationText(r);r._dest=destination(r);r._sale=saleBranch(r);r._or=orInfo(val(r,"orden"));r._keyDesc=keyText(val(r,"llave"));r._manualDesc=manualText(val(r,"manual"));r._state=currentState(r);r._search=(Object.values(r).join(" ")+" "+r._or.num+" "+r._or.raw+" "+r._keyDesc+" "+r._manualDesc).toLowerCase();});}
 
-async function init(){
+/* ── LOGIN ────────────────────────────────────────────────────────
+   La clave no está en este archivo: se valida en el Apps Script, que devuelve un
+   token firmado con vencimiento de 12 horas. */
+async function login(){
+  const pass=document.getElementById("loginPass"),err=document.getElementById("loginErr"),btn=document.getElementById("loginBtn");
+  const v=pass.value.trim();
+  if(!v){err.textContent="Ingresá la clave";return;}
+  err.style.color="var(--muted)";err.textContent="Verificando…";btn.disabled=true;
   try{
-    let res=await fetch(TSV_URL+"&cacheBust="+Date.now()),text=await res.text();
-    DATA=parseTSV(text);NOW=new Date().toLocaleString("es-AR");
+    const res=await fetch(API_URL+"?accion=login&clave="+encodeURIComponent(v),{redirect:"follow"});
+    const json=JSON.parse((await res.text()).trim());
+    if(!json.ok)throw new Error(json.error||"Clave incorrecta");
+    localStorage.setItem(TOKEN_KEY,json.token);
+    err.textContent="";
+    document.getElementById("loginOverlay").classList.add("hidden");
+    init();
+  }catch(ex){
+    err.style.color="var(--red)";
+    err.textContent=ex.message==="Clave incorrecta"?"Clave incorrecta":"No se pudo verificar: "+ex.message;
+    pass.value="";pass.focus();
+  }finally{btn.disabled=false;}
+}
+function cerrarSesion(msg){
+  localStorage.removeItem(TOKEN_KEY);
+  DATA=[];
+  document.getElementById("loginOverlay").classList.remove("hidden");
+  const err=document.getElementById("loginErr");
+  err.style.color="var(--muted)";
+  err.textContent=msg||"Tu sesión venció. Ingresá la clave de nuevo.";
+  document.getElementById("loginPass").focus();
+}
+
+async function init(){
+  const token=localStorage.getItem(TOKEN_KEY);
+  if(!token){cerrarSesion("");return;}
+  try{
+    let res=await fetch(API_URL+"?token="+encodeURIComponent(token)+"&cacheBust="+Date.now(),{redirect:"follow"});
+    let json=JSON.parse((await res.text()).trim());
+    if(!json.ok&&json.error==="SIN_AUTORIZACION"){cerrarSesion();return;}
+    if(!json.ok)throw new Error(json.error||"Error desconocido");
+    DATA=parseTSV(json.tsv);NOW=new Date().toLocaleString("es-AR");
     document.getElementById("updated").innerHTML=`<span class="sync-dot"></span>${NOW}`;
-    document.getElementById("sys").innerHTML=`<b>✅ Google Sheet TSV cargado correctamente</b><br><b>Registros:</b> ${DATA.length}<br><b>Última carga:</b> ${NOW}<br><b>Flujo:</b> Excel PABLO 2016 → Google Sheet PDI_BOX_AUTOSOL → Portal PDI<br><b>Intervalo:</b> 60 segundos`;
+    document.getElementById("sys").innerHTML=`<b>✅ Datos cargados correctamente</b><br><b>Registros:</b> ${DATA.length}<br><b>Última carga:</b> ${NOW}<br><b>Flujo:</b> Excel PABLO 2016 → Google Sheet (hoja BOX) → Apps Script → Portal PDI<br><b>Acceso:</b> protegido por clave · sesión de 12 h<br><b>Intervalo:</b> 60 segundos`;
     prep();draw();
   }catch(err){
     document.getElementById("updated").textContent="⚠ Error de conexión";
-    document.getElementById("sys").textContent="No se pudo leer Google Sheet: "+err.message;
+    document.getElementById("sys").textContent="No se pudieron leer los datos: "+err.message;
   }
 }
 function draw(){kpis();charts();fills();renderTable();renderStock();renderSeg();renderPanels();if(DATA[0])showDetail(DATA[0]);}
 
 /* ── VELOCÍMETRO ── */
 function speedometerHTML(p){
-  // Arco: de -180° a 0° (semicírculo). p=0 → aguja a la izq, p=100 → aguja a la der
-  const deg=-90+(p*1.8); // -90 = izq, +90 = der
+  const deg=-90+(p*1.8);
   const col=p>=80?"var(--green)":p>=50?"var(--orange)":"var(--red)";
   const colName=p>=80?"Muy bueno":p>=50?"Regular":"Bajo";
-  // Arcos SVG: rojo 0-33%, naranja 33-66%, verde 66-100%
   return`
   <div class="speedometer">
     <svg viewBox="0 0 150 90" xmlns="http://www.w3.org/2000/svg">
-      <!-- fondo -->
       <path d="M15 78 A60 60 0 0 1 135 78" fill="none" stroke="#0a1628" stroke-width="14" stroke-linecap="round"/>
-      <!-- zona roja -->
       <path d="M15 78 A60 60 0 0 1 55 24" fill="none" stroke="#ff3f52" stroke-width="14" stroke-opacity=".7"/>
-      <!-- zona naranja -->
       <path d="M55 24 A60 60 0 0 1 95 24" fill="none" stroke="#ffab00" stroke-width="14" stroke-opacity=".7"/>
-      <!-- zona verde -->
       <path d="M95 24 A60 60 0 0 1 135 78" fill="none" stroke="#00c96e" stroke-width="14" stroke-opacity=".7" stroke-linecap="round"/>
-      <!-- ticks -->
       <line x1="15" y1="78" x2="20" y2="78" stroke="#243f60" stroke-width="2"/>
       <line x1="75" y1="18" x2="75" y2="24" stroke="#243f60" stroke-width="2"/>
       <line x1="135" y1="78" x2="130" y2="78" stroke="#243f60" stroke-width="2"/>
-      <!-- aguja -->
       <line id="needle_${p}" x1="75" y1="78" x2="75" y2="26"
         stroke="white" stroke-width="2.5" stroke-linecap="round"
         style="transform-origin:75px 78px;transform:rotate(${deg}deg);filter:drop-shadow(0 0 3px rgba(255,255,255,.6))"/>
-      <!-- hub central -->
       <circle cx="75" cy="78" r="5" fill="#e0eeff" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
     </svg>
   </div>
@@ -512,7 +580,6 @@ function kpis(){
 /* ── CHARTS ── */
 function charts(){
   let total=DATA.length,ok=DATA.filter(isOK).length,noOk=total-ok;
-  // Barras modelo
   const modelData=entries(count(DATA.map(r=>r._fam)),12);
   const maxV=Math.max(...modelData.map(x=>x[1]),1);
   document.getElementById("modelBars").innerHTML=modelData.map(([l,v])=>`
@@ -521,7 +588,6 @@ function charts(){
       <div class="bar-lbl">${esc(l)}</div>
     </div>`).join("");
 
-  /* ── DESTINO ACTUAL: directo de columna dest (DESTINO ACTUAL) ── */
   const destRaw=DATA.map(r=>val(r,"dest")).filter(d=>d&&d!=="0"&&d!=="SIN DESTINO"&&low(d)!=="sin dato");
   const destData=entries(count(destRaw),10);
   const destTotal=destRaw.length||1;
@@ -535,7 +601,6 @@ function charts(){
       </div>`).join("")
     :`<div class="notice">Sin datos de destino actual.</div>`;
 
-  // Donut
   const C=2*Math.PI*70,okDash=(ok/Math.max(total,1))*C,nokDash=(noOk/Math.max(total,1))*C;
   document.getElementById("donutOk").setAttribute("stroke-dasharray",`${okDash} ${C-okDash}`);
   document.getElementById("donutNok").setAttribute("stroke-dasharray",`${nokDash} ${C-nokDash}`);
@@ -549,7 +614,6 @@ function charts(){
 
 /* ── PANELS ── */
 function renderPanels(){
-  // Llaves
   let keys=keyOutsideRows(),kp=document.getElementById("keysPanel");
   if(kp){
     if(!keys.length){kp.innerHTML='<div class="notice">🟢 No hay llaves fuera del armario.</div>';}
@@ -560,7 +624,6 @@ function renderPanels(){
         ${arr.slice(0,8).map(x=>`<div class="alert-meta">${esc(x.interno||"S/I")} · ${esc(x.veh||"Sin modelo")} · Box ${esc(x.box||"S/D")}</div>`).join("")}</div>`).join("");
     }
   }
-  // Alertas operativas
   let ops=document.getElementById("opsAlerts");
   if(ops){
     let repairAll=DATA.filter(r=>r._op==="A REPARAR");
@@ -577,7 +640,7 @@ function renderPanels(){
 
 /* ── FILLS ── */
 function fills(){fill("fEstado",[...new Set(DATA.map(r=>r._op))]);fill("fModelo",[...new Set(DATA.map(r=>r._fam))]);fill("fUbic",[...new Set(DATA.map(r=>r._ubic))]);fill("fFact",[...new Set(DATA.map(r=>val(r,"fact")))]);}
-function fill(id,vals){let s=document.getElementById(id),first=s.options[0].outerHTML;s.innerHTML=first+vals.filter(Boolean).sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");}
+function fill(id,vals){let s=document.getElementById(id),cur=s.value,first=s.options[0].outerHTML;s.innerHTML=first+vals.filter(Boolean).sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");s.value=cur;}
 
 /* ── TABLES ── */
 const clsBadge=op=>op==="OK"||op==="UNIDAD REPARADA"?"b-ok":op==="A REPARAR"?"b-red":"b-warn";
@@ -644,8 +707,15 @@ function show(id,btn,title,sub){
 }
 function clearFilters(){["q","fEstado","fModelo","fUbic","fFact"].forEach(id=>document.getElementById(id).value="");renderTable();}
 
-init();
-setInterval(init,60000);
+/* ── ARRANQUE ── */
+if(localStorage.getItem(TOKEN_KEY)){
+  document.getElementById("loginOverlay").classList.add("hidden");
+  init();
+}else{
+  document.getElementById("loginPass").focus();
+}
+// Refresco cada 60 s, solo con sesión activa.
+setInterval(()=>{if(localStorage.getItem(TOKEN_KEY))init();},60000);
 </script>
 </body>
 </html>
