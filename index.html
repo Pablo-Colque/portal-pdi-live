@@ -470,6 +470,16 @@ function currentState(r){if(r._op==="OK")return{label:"🟢 OK",desc:"Unidad dis
 
 function prep(){DATA.forEach(r=>{r._fam=family(val(r,"veh"));r._op=opState(r);r._ubic=locationText(r);r._dest=destination(r);r._sale=saleBranch(r);r._or=orInfo(val(r,"orden"));r._keyDesc=keyText(val(r,"llave"));r._manualDesc=manualText(val(r,"manual"));r._state=currentState(r);r._search=(Object.values(r).join(" ")+" "+r._or.num+" "+r._or.raw+" "+r._keyDesc+" "+r._manualDesc).toLowerCase();});}
 
+/* Pide la URL y devuelve el JSON. Si el servidor responde otra cosa (página de error,
+   texto viejo, 404 de GitHub), lanza un error claro en vez de "JSON.parse: unexpected…". */
+async function pedirJSON(url){
+  if(API_URL.startsWith("PEGAR_ACA"))throw new Error("Falta configurar API_URL en el index.html");
+  const res=await fetch(url,{redirect:"follow"});
+  const txt=(await res.text()).trim();
+  try{return JSON.parse(txt);}
+  catch(_){throw new Error("El servidor no respondió datos válidos (¿falta implementar versión nueva?). Recibido: "+txt.slice(0,80));}
+}
+
 /* ── LOGIN ────────────────────────────────────────────────────────
    La clave no está en este archivo: se valida en el Apps Script, que devuelve un
    token firmado con vencimiento de 12 horas. */
@@ -479,16 +489,25 @@ async function login(){
   if(!v){err.textContent="Ingresá la clave";return;}
   err.style.color="var(--muted)";err.textContent="Verificando…";btn.disabled=true;
   try{
-    const res=await fetch(API_URL+"?accion=login&clave="+encodeURIComponent(v),{redirect:"follow"});
-    const json=JSON.parse((await res.text()).trim());
-    if(!json.ok)throw new Error(json.error||"Clave incorrecta");
+    const json=await pedirJSON(API_URL+"?accion=login&clave="+encodeURIComponent(v));
+    if(!json.ok){
+      // Clave mal tipeada: el único caso que el usuario tiene que ver tal cual.
+      if(json.error==="Clave incorrecta")throw new Error("CLAVE");
+      throw new Error(json.error||"respuesta sin ok");
+    }
     localStorage.setItem(TOKEN_KEY,json.token);
     err.textContent="";
     document.getElementById("loginOverlay").classList.add("hidden");
     init();
   }catch(ex){
     err.style.color="var(--red)";
-    err.textContent=ex.message==="Clave incorrecta"?"Clave incorrecta":"No se pudo verificar: "+ex.message;
+    if(ex.message==="CLAVE"){
+      err.textContent="Clave incorrecta";
+    }else{
+      // El detalle técnico queda en la consola (F12) para diagnóstico, no en pantalla.
+      console.error("[Portal PDI] Error de login:",ex);
+      err.textContent="No se pudo conectar. Intentá de nuevo en unos minutos.";
+    }
     pass.value="";pass.focus();
   }finally{btn.disabled=false;}
 }
@@ -506,8 +525,7 @@ async function init(){
   const token=localStorage.getItem(TOKEN_KEY);
   if(!token){cerrarSesion("");return;}
   try{
-    let res=await fetch(API_URL+"?token="+encodeURIComponent(token)+"&cacheBust="+Date.now(),{redirect:"follow"});
-    let json=JSON.parse((await res.text()).trim());
+    let json=await pedirJSON(API_URL+"?token="+encodeURIComponent(token)+"&cacheBust="+Date.now());
     if(!json.ok&&json.error==="SIN_AUTORIZACION"){cerrarSesion();return;}
     if(!json.ok)throw new Error(json.error||"Error desconocido");
     DATA=parseTSV(json.tsv);NOW=new Date().toLocaleString("es-AR");
@@ -515,8 +533,9 @@ async function init(){
     document.getElementById("sys").innerHTML=`<b>✅ Datos cargados correctamente</b><br><b>Registros:</b> ${DATA.length}<br><b>Última carga:</b> ${NOW}<br><b>Flujo:</b> Excel PABLO 2016 → Google Sheet (hoja BOX) → Apps Script → Portal PDI<br><b>Acceso:</b> protegido por clave · sesión de 12 h<br><b>Intervalo:</b> 60 segundos`;
     prep();draw();
   }catch(err){
+    console.error("[Portal PDI] Error al cargar datos:",err);
     document.getElementById("updated").textContent="⚠ Error de conexión";
-    document.getElementById("sys").textContent="No se pudieron leer los datos: "+err.message;
+    document.getElementById("sys").textContent="No se pudieron cargar los datos. Intentá de nuevo en unos minutos.";
   }
 }
 function draw(){kpis();charts();fills();renderTable();renderStock();renderSeg();renderPanels();if(DATA[0])showDetail(DATA[0]);}
